@@ -20,12 +20,32 @@ def encoder(opt, image):  # [B,H,W,3]
         relu = tf.nn.relu(batchnorm)
         return relu if not final else fc
 
+    def residualBlock(opt, feat):
+        dim = int(feat.shape[-1])
+        feat_identity = feat
+        with tf.variable_scope("conva"):
+            weight, bias = createVariable(opt, [3, 3, dim, dim], stddev=opt.std)
+            conv = tf.nn.conv2d(feat, weight, strides=[1, 1, 1, 1], padding="SAME") + bias
+            batchnorm = batchNormalization(opt, conv, type="conv")
+            feat = tf.nn.relu(batchnorm)
+        with tf.variable_scope("convb"):
+            weight, bias = createVariable(opt, [3, 3, dim, dim], stddev=opt.std)
+            conv = tf.nn.conv2d(feat, weight, strides=[1, 1, 1, 1], padding="SAME") + bias
+            batchnorm = batchNormalization(opt, conv, type="conv")
+            feat = tf.nn.relu(batchnorm)
+        feat += feat_identity
+        return feat
+
     with tf.variable_scope("encoder"):
         feat = image
         with tf.variable_scope("conv1"): feat = conv2Layer(opt, feat, 32)  # 32x32
+        with tf.variable_scope("resblock1"): feat = residualBlock(opt, feat)
         with tf.variable_scope("conv2"): feat = conv2Layer(opt, feat, 64)  # 16x16
+        with tf.variable_scope("resblock2"): feat = residualBlock(opt, feat)
         with tf.variable_scope("conv3"): feat = conv2Layer(opt, feat, 128)  # 8x8
+        with tf.variable_scope("resblock3"): feat = residualBlock(opt, feat)
         with tf.variable_scope("conv4"): feat = conv2Layer(opt, feat, 256)  # 4x4
+        with tf.variable_scope("resblock4"): feat = residualBlock(opt, feat)
         feat = tf.reshape(feat, [opt.batchSize, -1])
         with tf.variable_scope("fc2"): feat = linearLayer(opt, feat, 2048)
         with tf.variable_scope("fc1"): feat = linearLayer(opt, feat, 1024)
